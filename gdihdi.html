@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bubble Chart - Gender vs Human Development Index</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      width: 120px;
+      padding: 8px;
+      background: lightgray;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+    }
+    .slider {
+      width: 100%;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Gender Development Index vs Human Development Index (2012-2022)</h2>
+<input type="range" min="2012" max="2022" value="2022" id="yearSlider" class="slider">
+<p>Year: <span id="yearLabel">2022</span></p>
+
+<svg width="960" height="600"></svg>
+
+<div class="tooltip"></div>
+
+<script>
+
+// Load the CSV data
+d3.csv("filtered_data").then(function(data) {
+  const svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+  const margin = {top: 100, right: 100, bottom: 100, left: 100};
+        chartWidth = width - margin.left - margin.right,
+        chartHeight = height - margin.top - margin.bottom;
+
+  const chartArea = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const xScale = d3.scaleLinear().range([0, chartWidth]);
+  const yScale = d3.scaleLinear().range([chartHeight, 0]);
+  const sizeScale = d3.scaleSqrt().range([4, 40]);
+
+  const xAxis = d3.axisBottom(xScale);
+  const yAxis = d3.axisLeft(yScale);
+
+  const tooltip = d3.select(".tooltip");
+
+  let currentYear = 2012;
+  let playing = false;
+
+  function updateChart(year) {
+    const filteredData = data.filter(d => d.Year == year);
+
+    // Dynamically set the color scale domain based on the data
+    const continents = [...new Set(filteredData.map(d => d.Continent))];
+    const colorScale = d3.scaleOrdinal()
+                         .domain(continents)
+                         .range(d3.schemeCategory10);
+
+    xScale.domain(d3.extent(filteredData, d => +d["Human Development Index"])).nice();
+    yScale.domain(d3.extent(filteredData, d => +d["Gender Development Index"])).nice();
+    sizeScale.domain(d3.extent(filteredData, d => +d["Population"]));
+
+    const bubbles = chartArea.selectAll(".bubble")
+        .data(filteredData, d => d.Entity);
+
+    bubbles.exit().remove();
+
+    const bubblesEnter = bubbles.enter().append("circle")
+        .attr("class", "bubble")
+        .attr("cx", d => xScale(d["Human Development Index"]))
+        .attr("cy", d => yScale(d["Gender Development Index"]))
+        .attr("r", d => sizeScale(d["Population"]))
+        .style("fill", d => colorScale(d.Continent))
+        .style("opacity", 0.7)
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", .9);
+          tooltip.html(`${d.Entity}<br>HDI: ${d["Human Development Index"]}<br>GDI: ${d["Gender Development Index"]}<br>Population: ${d.Population}`)
+              .style("left", (event.pageX + 5) + "px")
+              .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", d => {
+          tooltip.transition().duration(500).style("opacity", 0);
+        });
+
+    bubblesEnter.merge(bubbles)
+        .transition()
+        .duration(1000)
+        .attr("cx", d => xScale(d["Human Development Index"]))
+        .attr("cy", d => yScale(d["Gender Development Index"]))
+        .attr("r", d => sizeScale(d["Population"]))
+        .style("fill", d => colorScale(d.Continent));
+
+    chartArea.selectAll(".axis").remove();
+
+    chartArea.append("g")
+        .attr("class", "x axis")
+        .attr("transform", `translate(0,${chartHeight})`)
+        .call(xAxis);
+
+    chartArea.append("g")
+        .attr("class", "y axis")
+        .call(yAxis);
+
+    // Add titles for x and y axes
+    chartArea.append("text")
+        .attr("class", "x axis-label")
+        .attr("x", chartWidth / 2)
+        .attr("y", chartHeight + 40)
+        .style("text-anchor", "middle")
+        .text("Human Development Index");
+
+    	chartArea.append("text")
+  	.attr("class", "y axis-label")
+  	.attr("x", -chartHeight / 2)
+  	.attr("y", -40)
+  	.style("text-anchor", "middle")
+  	.text("Gender Development Index")
+  	.attr("transform", "rotate(-90)");
+  }
+
+  updateChart(currentYear);
+
+  d3.select("#yearSlider").on("input", function() {
+    const selectedYear = this.value;
+    d3.select("#yearLabel").text(selectedYear);
+    updateChart(selectedYear);
+  });
+
+  d3.select("#playButton").on("click", function() {
+    playing = !playing;
+    if (playing) {
+      d3.interval(() => {
+        currentYear++;
+        if (currentYear > 2022) {
+          currentYear = 2012;
+        }
+        updateChart(currentYear);
+      }, 1000);
+    }
+  });
+
+}).catch(function(error) {
+  console.error("Error loading the CSV file:", error);
+});
+
+</script>
+
+</body>
+</html>
